@@ -21,6 +21,9 @@ Parameters:
 int
 execute(svec* cmd, int input_redirect_file, int output_redirect_file, int background)
 {
+  // printf("cmd when execute is called\n" );
+  // print_svec(cmd);
+
     // if the command is cd
     if (strcmp(svec_get(cmd, 0), "cd") == 0) {
       int rv;
@@ -92,8 +95,6 @@ execute(svec* cmd, int input_redirect_file, int output_redirect_file, int backgr
         //else {
           // Execute the command
           // Print the error if there is one
-          //printf("cmd before execvp\n" );
-          //print_svec(cmd);
 
           // Do redirects if necessary
           if (input_redirect_file != STDIN_FILENO) {
@@ -107,8 +108,12 @@ execute(svec* cmd, int input_redirect_file, int output_redirect_file, int backgr
             //close(output_redirect_file);
           }
 
+          // make sure the cmd array is null terminated
+          svec_push_back(cmd, NULL);
+
           if (execvp(svec_get(cmd, 0), cmd->data) == -1) {
             perror("Error");
+            exit(-1);
           }
         //}
 
@@ -339,10 +344,18 @@ parse_tokens(svec* cmd) {
         parse_tokens(tokens_after_and);
         free_svec(tokens_after_and);
 
-      } else {
-        // execution was unsuccessful, can stop now
-        return;
       }
+
+      // execution was unsuccessful, can stop. Unless there is a semicolon
+      int semicolon_idx = svec_find(cmd, ";");
+      start_token_idx = semicolon_idx + 1;
+      if (semicolon_idx > -1 && start_token_idx < cmd->size) {
+        svec* to_run = get_sub_svec(cmd, start_token_idx, cmd->size);
+        parse_tokens(to_run);
+        free_svec(to_run);
+      }
+
+      return;
     }
 
     // || : or operator
@@ -355,10 +368,19 @@ parse_tokens(svec* cmd) {
         parse_tokens(tokens_after_or);
         free_svec(tokens_after_or);
 
-      } else {
-        // execution was successful, can stop now
-        return;
       }
+
+      // execution was successful, can stop now. Unless there's a semicolon
+      // execution was unsuccessful, can stop. Unless there is a semicolon
+      int semicolon_idx = svec_find(cmd, ";");
+      start_token_idx = semicolon_idx + 1;
+      if (semicolon_idx > -1 && start_token_idx < cmd->size) {
+        svec* to_run = get_sub_svec(cmd, start_token_idx, cmd->size);
+        parse_tokens(to_run);
+        free_svec(to_run);
+      }
+
+      return;
     }
 
     // The current token is not an operator/special symbol

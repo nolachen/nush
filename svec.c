@@ -43,7 +43,11 @@ void
 svec_put(svec* sv, int ii, char* item)
 {
     assert(ii >= 0 && ii < sv->size);
-    sv->data[ii] = (char*) strdup(item);
+    if (item != NULL) {
+      sv->data[ii] = (char*) strdup(item);
+    } else {
+      sv->data[ii] = NULL;
+    }
 
 }
 
