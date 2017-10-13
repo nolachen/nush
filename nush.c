@@ -396,6 +396,7 @@ parse_tokens(svec* cmd) {
   svec* last_tokens_to_execute = get_sub_svec(cmd, start_token_idx, cmd->size);
   //printf("Success get_sub_svec");
   execute(last_tokens_to_execute, STDIN_FILENO, STDOUT_FILENO, 0);
+  free_svec(last_tokens_to_execute);
 }
 
 int
