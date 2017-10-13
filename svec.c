@@ -1,69 +1,90 @@
-#include <stdio.h>
-#include <stdlib.h>
+// svec.c
+// Author: Nat Tuck
+// 3650F2017, Challenge01 Hints
+
 #include <string.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <stdio.h>
 
 #include "svec.h"
 
-/*
-Constructs a new empty svec with an initial maximum size of 4 items
-An svec is a vector (array list) of strings
- */
 svec*
-svec_constructor()
+make_svec()
 {
-    svec* new_svec = malloc(sizeof(svec));
-    (*new_svec).size = 0;
-    (*new_svec).max = 4;
-    (*new_svec).items = malloc((*new_svec).max * sizeof(char*));
-    return new_svec;
+    svec* sv = malloc(sizeof(svec));
+    sv->size = 0;
+    sv->cap  = 4;
+    sv->data = malloc(4 * sizeof(char*));
+    memset(sv->data, 0, 4 * sizeof(char*));
+    return sv;
 }
 
-/*
-Add the given string to the end of the given svec.
- */
 void
-add_to_end(svec* list, char* to_add)
+free_svec(svec* sv)
 {
-    // If the current size of the list is greater than or equal to the max size,
-    // Then double the max size to accomodate, and copy the items over to the new reallocation
-    if ((*list).size >= (*list).max) {
-        (*list).max *= 2;
-        (*list).items = realloc((*list).items, (*list).max * sizeof(char*));
+    for (int ii = 0; ii < sv->size; ++ii) {
+        if (sv->data[ii] != 0) {
+            free(sv->data[ii]);
+        }
     }
-
-    // Duplicate to_add and add it to the end of the list
-    (*list).items[(*list).size] = strdup(to_add);
-
-    // Increase the current size of the list by 1
-    (*list).size += 1;
+    free(sv->data);
+    free(sv);
 }
 
-/*
-Print each string in the given svec on a new line to stdout
- */
-void
-print_svec(svec* list)
+char*
+svec_get(svec* sv, int ii)
 {
-    for (int i = 0; i < (*list).size; ++i) {
-        printf("%s", (*list).items[i]);
-        printf("\n");
-    }
+    assert(ii >= 0 && ii < sv->size);
+    return sv->data[ii];
 }
 
-/*
-Free the memory allocated for the given svec
- */
 void
-free_svec(svec* list)
+svec_put(svec* sv, int ii, char* item)
 {
-    // Free each string (character array) in the svec
-    for (int i = 0; i < (*list).size; ++i) {
-        free((*list).items[i]);
+    assert(ii >= 0 && ii < sv->size);
+    sv->data[ii] = strdup(item);
+
+}
+
+void svec_push_back(svec* sv, char* item)
+{
+    int ii = sv->size;
+
+    if (ii >= sv->cap) {
+        sv->cap *= 2;
+        sv->data = (char**) realloc(sv->data, sv->cap * sizeof(char*));
     }
 
-    // Free the array of strings in the svec
-    free((*list).items);
+    sv->size = ii + 1;
+    svec_put(sv, ii, item);
+}
 
-    // Free the svec itself
-    free(list);
+void
+print_svec(svec* sv) {
+  for (int i = 0; i < sv->size; ++i) {
+    printf("%s\n", sv->data[i]);
+  }
+}
+
+svec*
+get_sub_svec(svec* sv, int begin_idx, int end_idx) {
+  assert(begin_idx < end_idx && begin_idx >= 0 && end_idx <= sv->size);
+  svec* sub_svec = make_svec();
+  for (int i = begin_idx; i < end_idx; ++i) {
+    svec_push_back(sub_svec, svec_get(sv, i));
+  }
+  return sub_svec;
+}
+
+int
+svec_find(svec* sv, char* to_find) {
+  for (int i = 0; i < sv->size; ++i) {
+    if (strcmp(sv->data[i], to_find) == 0) {
+      return i;
+    }
+  }
+
+  // to_find was not found
+  return -1;
 }
