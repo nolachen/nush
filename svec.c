@@ -43,7 +43,7 @@ void
 svec_put(svec* sv, int ii, char* item)
 {
     assert(ii >= 0 && ii < sv->size);
-    sv->data[ii] = strdup(item);
+    sv->data[ii] = (char*) strdup(item);
 
 }
 
@@ -69,10 +69,10 @@ print_svec(svec* sv) {
 
 svec*
 get_sub_svec(svec* sv, int begin_idx, int end_idx) {
-     printf("The svec to get sub of : ");
-     print_svec(sv);
-     printf("begin: %i\n", begin_idx);
-     printf("end: %i\n", end_idx);
+    //  printf("The svec to get sub of : ");
+    //  print_svec(sv);
+    //  printf("begin: %i\n", begin_idx);
+    //  printf("end: %i\n", end_idx);
   //perror("help");
 
   assert(begin_idx < end_idx && begin_idx >= 0 && end_idx <= sv->size);
