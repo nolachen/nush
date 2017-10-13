@@ -183,7 +183,7 @@ parse_tokens(svec* cmd) {
       // The next token after the > operator will be the file to redirect output to
       char* redirect_file_path = svec_get(cmd, i + 1); // get the file path
       // create file if it doesnt exist, and make it read and write
-      int fd = open(redirect_file_path, O_RDWR | O_CREAT, 666);
+      int fd = open(redirect_file_path, O_RDWR | O_CREAT | O_TRUNC, 0666);
 
       // Execute the tokens, passing in the file descriptor of the redirect file
       svec* to_execute = get_sub_svec(cmd, start_token_idx, i);
