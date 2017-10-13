@@ -144,11 +144,7 @@ parse_tokens(svec* cmd) {
         // Make sure the token array is null terminated
         svec_push_back(left_tokens, NULL);
 
-        if (execvp(svec_get(left_tokens, 0), cmd->data) == -1) {
-          perror("Error");
-          exit(-1);
-        }
-        //execvp(svec_get(left_tokens, 0), left_tokens->data);
+        execvp(svec_get(left_tokens, 0), left_tokens->data);
         // Should never get here
       }
 
