@@ -3,7 +3,7 @@ BIN  := nush
 SRCS := $(wildcard *.c)
 OBJS := $(SRCS:.c=.o)
 
-CFLAGS := -g
+CFLAGS := -g -std=c99
 LDLIBS :=
 
 $(BIN): $(OBJS)

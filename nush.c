@@ -4,19 +4,23 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <fcntl.h> // for open
 #include "tokenize.h"
 #include "svec.h"
 
 // Return an int status
 // Returns 0 if the program exited successfully
 // Returns another integer if the program failed
+/*
+Parameters:
+- svec* cmd: pointer to the svec of tokens to execute
+- int input_redirect_file: file descriptor of a file to redirect input (0 for stdin)
+- int output_redirect_file: file descriptor of a file to redirect output (1 for stdout)
+- int background: 0 if the cmd should run in foreground, 1 if cmd should run in background
+*/
 int
-execute(svec* cmd)
+execute(svec* cmd, int input_redirect_file, int output_redirect_file, int background)
 {
-    char str_or[] = "||";
-    char str_and[] = "&&";
-
-
     // if the command is cd
     if (strcmp(svec_get(cmd, 0), "cd") == 0) {
       int rv;
@@ -45,7 +49,11 @@ execute(svec* cmd)
         // Child may still be running until we wait.
 
         int status;
-        waitpid(cpid, &status, 0);
+
+        // Don't wait if we're running the cmd in the background
+        if (!background) {
+          waitpid(cpid, &status, 0);
+        }
 
         //printf("== executed program complete ==\n");
 
@@ -84,14 +92,31 @@ execute(svec* cmd)
         //else {
           // Execute the command
           // Print the error if there is one
+          //printf("cmd before execvp\n" );
+          //print_svec(cmd);
+
+          // Do redirects if necessary
+          if (input_redirect_file != STDIN_FILENO) {
+            // Redirect stdin to the redirect_file
+            dup2(input_redirect_file, STDIN_FILENO);
+          }
+
+          if (output_redirect_file != STDOUT_FILENO) {
+            // Redirect stdout to the redirect_file
+            dup2(output_redirect_file, STDOUT_FILENO);
+            //close(output_redirect_file);
+          }
+
           if (execvp(svec_get(cmd, 0), cmd->data) == -1) {
-            perror("Error: ");
+            perror("Error");
           }
         //}
 
-        printf("Can't get here, exec only returns on error.");
+        //printf("Can't get here, exec only returns on error.");
         return -1; // return -1 if execution was unsuccessful
     }
+
+    //exit(0);
 }
 
 /*
@@ -136,14 +161,19 @@ parse_tokens(svec* cmd) {
     // jk gonnna try this first: parse for ALL operators and symbols
     if (strcmp(current_token, ";") == 0) {
       // First execute the tokens from start_token_idx to i
+      //printf("Before calling get_sub_svec in semicolon case: to_execute \n");
       svec* to_execute = get_sub_svec(cmd, start_token_idx, i);
-      execute(to_execute);
+      execute(to_execute, STDIN_FILENO, STDOUT_FILENO, 0);
       free_svec(to_execute);
 
-      svec* tokens_after_semicolons = get_sub_svec(cmd, i + 1, cmd->size);
-      parse_tokens(tokens_after_semicolons);
       start_token_idx = i + 1;
-      free_svec(tokens_after_semicolons);
+      // Only try to parse more tokens if there are any
+      if (start_token_idx < cmd->size) {
+        svec* tokens_after_semicolons = get_sub_svec(cmd, i + 1, cmd->size);
+        parse_tokens(tokens_after_semicolons);
+        free_svec(tokens_after_semicolons);
+      }
+
       return;
     }
 
@@ -153,12 +183,16 @@ parse_tokens(svec* cmd) {
     // Fork to execute commands on LEFT recursively
     // Fork to execute commands on RIGHT recursively
     // wait for children
+    // TODO perhaps why this doesnt work is bc im waiting for both children in parallel
+    // Instead, try waiting for first child, then calling second fork, then waiting again
     else if (strcmp(current_token, "|") == 0) {
       int cpid1;
       int cpid2;
 
       //svec* left_tokens = get_sub_svec(cmd, 0, i);
+      //printf("Before calling get_sub_svec in pipe case: left tokens \n");
       svec* left_tokens = get_sub_svec(cmd, start_token_idx, i);
+      //printf("Before calling get_sub_svec in pipe case: right tokens \n");
       svec* right_tokens = get_sub_svec(cmd, i + 1, cmd->size);
 
       int pipefd[2];
@@ -193,7 +227,6 @@ parse_tokens(svec* cmd) {
         parse_tokens(right_tokens);
 
         _exit(0);
-
       }
 
       int status1;
@@ -209,15 +242,98 @@ parse_tokens(svec* cmd) {
       free_svec(right_tokens);
 
       return;
+    }
 
+    // Output redirect
+    else if (strcmp(current_token, ">") == 0) {
+      // The next token after the > operator
+      // will be the file to redirect output to
+      char* redirect_file_path = svec_get(cmd, i + 1); // get the file path
+      int fd = open(redirect_file_path, O_WRONLY | O_CREAT, 666); // create file if it doesnt exist, and make it write only
+      //FILE* redirect_file = fopen(redirect_file_path, "w+"); // open the file
+      //int fd = fileno(redirect_file); // get file descriptor
+
+      // Redirect stdout to the redirect_file
+      //dup2(fd, STDOUT_FILENO);
+
+      svec* to_execute = get_sub_svec(cmd, start_token_idx, i);
+      execute(to_execute, STDIN_FILENO, fd, 0);
+      free_svec(to_execute);
+
+      //close?
+      close(fd);
+
+      //fclose(redirect_file);
+      //return;
+
+      // lmfao im a fucking idiot for writing all the below code bc
+      // OBVIOUSLY THE NEXT LINE HASNT BEEN READ OR PASSED INTO THIS FUNCTION YET BC ITS A NEW line
+      // SO OBVIOUSLY IT WOULD BE OUT OF BOUNDS OHHH MY GOD
+
+      // k i fixed it by adding a check for whether start_token_idx < cmd.size
+
+      // add 2 to the current index to account for the ">" and the filename
+      start_token_idx = i + 2;
+
+      if (start_token_idx < cmd->size) {
+        svec* tokens_after_redirect = get_sub_svec(cmd, start_token_idx, cmd->size);
+        parse_tokens(tokens_after_redirect);
+        free_svec(tokens_after_redirect);
+      }
+
+      return;
+    }
+
+    // Input redirect
+    else if (strcmp(current_token, "<") == 0) {
+      // The next token after the < operator
+      // will be the file to redirect input to
+      char* redirect_file_path = svec_get(cmd, i + 1); // get the file path
+      int fd = open(redirect_file_path, O_RDONLY); // only need to read to use this file as input
+
+      svec* to_execute = get_sub_svec(cmd, start_token_idx, i);
+      execute(to_execute, fd, STDOUT_FILENO, 0);
+      free_svec(to_execute);
+
+      //close?
+      close(fd);
+
+      // add 2 to the current index to account for the "<" and the filename
+      start_token_idx = i + 2;
+
+      if (start_token_idx < cmd->size) {
+        svec* tokens_after_redirect = get_sub_svec(cmd, start_token_idx, cmd->size);
+        parse_tokens(tokens_after_redirect);
+        free_svec(tokens_after_redirect);
+      }
+      return;
+    }
+
+    // Background operator
+    else if (strcmp(current_token, "&") == 0) {
+      svec* to_execute_background = get_sub_svec(cmd, start_token_idx, i);
+      execute(to_execute_background, STDIN_FILENO, STDOUT_FILENO, 1);
+      free_svec(to_execute_background);
+
+      start_token_idx = i + 1;
+      if (start_token_idx < cmd->size) {
+        svec* tokens_after_background = get_sub_svec(cmd, i + 1, cmd-> size);
+        parse_tokens(tokens_after_background);
+        free_svec(tokens_after_background);
+      }
+
+      return;
     }
 
     // assuming the code from before the && has run ?
     // call execute on the cmds before &&
+    // && : and operator
     else if (strcmp(current_token, "&&") == 0) {
+      //printf("Before calling get_sub_svec in && case: tokens_before_and \n");
       svec* tokens_before_and = get_sub_svec(cmd, start_token_idx, i);
-      if (execute(tokens_before_and) == 0) {
+      if (execute(tokens_before_and, STDIN_FILENO, STDOUT_FILENO, 0) == 0) {
         // execution was successful, continue to parse tokens after &&
+        //printf("Before calling get_sub_svec in && case: tokens_after_and \n");
         svec* tokens_after_and = get_sub_svec(cmd, i + 1, cmd->size);
         start_token_idx = i + 1;
         parse_tokens(tokens_after_and);
@@ -225,6 +341,22 @@ parse_tokens(svec* cmd) {
 
       } else {
         // execution was unsuccessful, can stop now
+        return;
+      }
+    }
+
+    // || : or operator
+    else if (strcmp(current_token, "||") == 0) {
+      svec* tokens_before_or = get_sub_svec(cmd, start_token_idx, i);
+      if (execute(tokens_before_or, STDIN_FILENO, STDOUT_FILENO, 0) != 0) {
+        // execution was unsuccessful, continue to parse tokens after ||
+        svec* tokens_after_or = get_sub_svec(cmd, i + 1, cmd->size);
+        start_token_idx = i + 1;
+        parse_tokens(tokens_after_or);
+        free_svec(tokens_after_or);
+
+      } else {
+        // execution was successful, can stop now
         return;
       }
     }
@@ -237,14 +369,16 @@ parse_tokens(svec* cmd) {
     }
   }
 
+  //printf("Before calling get_sub_svec for last_tokens_to_execute \n");
   svec* last_tokens_to_execute = get_sub_svec(cmd, start_token_idx, cmd->size);
-  execute(last_tokens_to_execute);
-
+  //printf("Success get_sub_svec");
+  execute(last_tokens_to_execute, STDIN_FILENO, STDOUT_FILENO, 0);
 }
 
 int
 main(int argc, char* argv[])
 {
+    //printf("main start");
     char cmd[256];
     svec* tokens;
 
@@ -255,6 +389,7 @@ main(int argc, char* argv[])
         // fgets(cmd, 256, stdin);
 
         for (;;) {
+          //printf("For loop start");
           // Print input prompt
           printf("nush$ ");
           fflush(stdout);
@@ -272,6 +407,7 @@ main(int argc, char* argv[])
           tokens = tokenize(cmd);
           // Only execute if the user has entered a command
           if (tokens->size > 0) {
+            //printf("BEFORE PARSE TOKENS IN MAIN");
             parse_tokens(tokens);
           }
           //TODO idk
@@ -283,6 +419,7 @@ main(int argc, char* argv[])
       FILE* script = fopen(argv[1], "r");
       if (script != NULL) {
         while (fgets(cmd, 256, script) != NULL) {
+          //printf("inside script while loop");
           tokens = tokenize(cmd);
           parse_tokens(tokens);
           //TODO idk
