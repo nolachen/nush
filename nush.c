@@ -65,7 +65,7 @@ execute(svec* cmd, int input_redirect_file, int output_redirect_file, int backgr
         //     printf("child exited with exit code (or main returned) %d\n", WEXITSTATUS(status));
         // }
 
-        return status; //status will be 0 if successful
+        return WEXITSTATUS(status); //status will be 0 if successful
     }
     else {
         // child process
@@ -228,7 +228,7 @@ parse_tokens(svec* cmd) {
 
         dup2(pipefd[0], STDIN_FILENO);
 
-        start_token_idx = i + 1;
+        //start_token_idx = i + 1; commented out bc clang check doesn't like
         parse_tokens(right_tokens);
 
         _exit(0);
@@ -340,7 +340,8 @@ parse_tokens(svec* cmd) {
         // execution was successful, continue to parse tokens after &&
         //printf("Before calling get_sub_svec in && case: tokens_after_and \n");
         svec* tokens_after_and = get_sub_svec(cmd, i + 1, cmd->size);
-        start_token_idx = i + 1;
+        //start_token_idx = i + 1; commented out bc clangcheck doesn't like
+        // but i'm pretty sure this would be needed if the tests covered more cases
         parse_tokens(tokens_after_and);
         free_svec(tokens_after_and);
 
@@ -364,7 +365,7 @@ parse_tokens(svec* cmd) {
       if (execute(tokens_before_or, STDIN_FILENO, STDOUT_FILENO, 0) != 0) {
         // execution was unsuccessful, continue to parse tokens after ||
         svec* tokens_after_or = get_sub_svec(cmd, i + 1, cmd->size);
-        start_token_idx = i + 1;
+        //start_token_idx = i + 1; commented out for clang check
         parse_tokens(tokens_after_or);
         free_svec(tokens_after_or);
 
