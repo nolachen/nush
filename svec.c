@@ -73,12 +73,6 @@ print_svec(svec* sv) {
 
 svec*
 get_sub_svec(svec* sv, int begin_idx, int end_idx) {
-    //  printf("The svec to get sub of : ");
-    //  print_svec(sv);
-    //  printf("begin: %i\n", begin_idx);
-    //  printf("end: %i\n", end_idx);
-  //perror("help");
-
   assert(begin_idx < end_idx && begin_idx >= 0 && end_idx <= sv->size);
   svec* sub_svec = make_svec();
   for (int i = begin_idx; i < end_idx; ++i) {
